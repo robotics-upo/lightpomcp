@@ -171,8 +171,9 @@ public:
      	 * Update the current belief
 	 * @param actionIndex: The index of the last executed action
 	 * @param observation: The obtained observation
+	 * @return true if the planner has been reseted, false otherwise
 	 */
-	virtual void moveTo(unsigned actionIndex, const Z& observation);
+	virtual bool moveTo(unsigned actionIndex, const Z& observation);
 	/**
      	 * Reset the planner to the initial belief
 	 */
@@ -182,6 +183,14 @@ public:
 	 * @return the size of the tree
      	 */
 	virtual std::size_t size() const {return size_;}
+	/**
+	 * Get the current belief as a multiset of particles
+	 * @return the current belief
+	 */
+	const utils::Multiset<S>& getCurrentBelief() const {return root->particles;}
+
+
+	virtual unsigned getDepth() const {return getDepth(root);}
 
 private:
 	void search();
@@ -191,6 +200,7 @@ private:
 	Node<S,Z>* getNode(Node<S,Z>* parent, unsigned actionIndex, const Z& observation);
 	void eraseTree(Node<S,Z>* node);
 	void getRootParticles();
+	unsigned getDepth(Node<S,Z>* node) const;
 	
 	Simulator<S,Z,A>& simulator;
 
@@ -199,6 +209,7 @@ private:
 	double explorationConstant;
 	unsigned currentAction;
 	std::size_t size_;
+	
 	Node<S,Z> *root;
 	std::vector<const S*> rootParticles;
 	std::vector<unsigned> actionIndexes;
@@ -230,7 +241,7 @@ void PomcpPlanner<S,Z,A>::reset()
 	assert(size_==0);
 	#endif
         size_=1;
-	root = new Node<S,Z>();
+        root = new Node<S,Z>();
 }
 
 template <typename S, typename Z, typename A>
@@ -390,6 +401,25 @@ void PomcpPlanner<S,Z,A>::eraseTree(Node<S,Z>* node)
 	delete node;
 }
 
+template<typename S,typename Z, typename A>
+inline
+unsigned PomcpPlanner<S,Z,A>::getDepth(Node<S,Z>* node) const
+{
+	if (node->childs.empty()) {
+		return 0;
+	}
+	unsigned max=0;
+	for (auto it = node->childs.begin(); it!=node->childs.end(); ++it) {
+		unsigned aux = getDepth(it->second);
+		if (aux > max) {
+			max=aux;
+		}
+	}
+	return max+1;
+	
+}
+
+
 template<typename S, typename Z, typename A>
 inline
 void PomcpPlanner<S,Z,A>::getRootParticles()
@@ -405,13 +435,19 @@ void PomcpPlanner<S,Z,A>::getRootParticles()
 
 template<typename S, typename Z, typename A>
 inline
-void PomcpPlanner<S,Z,A>::moveTo(unsigned actionIndex, const Z& observation)
+bool PomcpPlanner<S,Z,A>::moveTo(unsigned actionIndex, const Z& observation)
 {
+	bool reseted;
 	Edge<Z> edge(actionIndex,observation);
 	auto it = root->childs.find(edge);
 	if (it == root->childs.end() ||
 		it->second->particles.size()==0) {
+		//for (auto it = root->childs.begin(); it!=root->childs.end(); ++it) {
+		//	std::cout<<(it->first.actionIndex)<<" ~ "<<(it->first.observation)<<"    ";
+		//}
+		//std::cout<<std::endl;
 		reset();
+		reseted=true;
 	} else {
 		Node<S,Z>* nextRoot = it->second;
 		for (auto it1 = root->childs.begin(); it1!= root->childs.end(); ++it1) {
@@ -425,7 +461,9 @@ void PomcpPlanner<S,Z,A>::moveTo(unsigned actionIndex, const Z& observation)
 		getRootParticles();
 		currentAction = simulator.getNumActions();
 		simulator.cleanup();
+		reseted=false;
 	}
+	return reseted;
 }
 
 }
