@@ -247,7 +247,7 @@ void PomcpPlanner<S,Z,A,B>::reset()
 {
 	currentAction = simulator.getNumActions();
 	simulator.cleanup();
-        eraseTree(root);
+        boost::thread freeMemThread(eraseTree,root);
 	root = new Node<S,Z,B>();
 }
 
