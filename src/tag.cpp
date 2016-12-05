@@ -148,11 +148,12 @@ void printTag(int s0,int a0, int z1, double reward)
 int main()
 {
 	ZmdpSimulator simulator(TAG_FILE, tagStopCondition);
-	PomcpPlanner<int,int,int> planner(simulator,TAG_PLANNING_TIME,TAG_THRESHOLD,TAG_EXPLORATION_CTE);
+	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TAG_PLANNING_TIME,TAG_THRESHOLD,TAG_EXPLORATION_CTE);
 
 	int s0,a0,s1,z1;
 	double r,reward,discount;
 	double sum=0;
+	unsigned depth,size;
 	for(int i=1;i<=100;i++) {
 		std::cout<<"Simulation "<<i<<std::endl;
 		simulator.sampleInitialState(s0);
@@ -162,7 +163,9 @@ int main()
 		reward = r;
 		while(!tagStopCondition(s0,a0,z1,s1)) {
 			printTag(s0,a0,z1,reward);
-			std::cout<<"Size: "<<planner.size()<<std::endl;
+			planner.computeInfo(size,depth);
+			std::cout<<"Size: "<<size<<std::endl;
+			std::cout<<"Depth: "<<depth<<std::endl;
 			planner.moveTo(a0,z1);
 			s0 = s1;
 			a0 = planner.getAction();
@@ -172,7 +175,9 @@ int main()
 		}
 		sum+=reward;
 		printTag(s0,a0,z1,reward);	
-		std::cout<<"Size: "<<planner.size()<<std::endl;
+		planner.computeInfo(size,depth);
+		std::cout<<"Size: "<<size<<std::endl;
+		std::cout<<"Depth: "<<depth<<std::endl;
 		std::cout<<"Average reward: "<<sum/(double)i<<std::endl;		
 		planner.reset();
 	}

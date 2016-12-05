@@ -28,7 +28,7 @@ namespace utils
 /**
  * class Multiset<T>
  *
- * A Multiset implementation over std::unordered_map
+ * A Multiset implementation by using std::unordered_map
  *
  * T is the type for the elements to be stored
  *

@@ -34,9 +34,9 @@ namespace pomcp
  * A is the type for actions
  *
  * Note: the next structs and operators should be defined:
- * 	   std::hash<S>
+ * 	   std::hash<S> (if you use a belief based on hash function in pomcp::PomcpPlanner<S,Z,A,B>)
  * 	   std::hash<Z>
- *	   bool S::operator ==(const S& other) const
+ *	   bool S::operator ==(const S& other) const (if you use a belief based on hash function in pomcp::PomcpPlanner<S,Z,A,B>)
  *	   bool Z::operator ==(const Z& other) const
  *
  * @author Ignacio Perez

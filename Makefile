@@ -1,5 +1,5 @@
 CFlags=-c -Wall -O3  -std=gnu++11 -Iinclude -Izmdp/include
-LDFlags= -Lzmdp/lib/linux3 -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon
+LDFlags= -Lzmdp/lib/linux3 -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon -lboost_thread -lboost_system
 CC=g++
 RM=rm
 

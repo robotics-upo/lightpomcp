@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <boost/functional/hash.hpp>
+#include <boost/thread.hpp>
 
 #ifdef _POMCP_DEBUG_
 #include <assert.h>
@@ -34,9 +35,11 @@
 #include "Timer.hpp"
 #include "Random.hpp"
 #include "Multiset.hpp"
+#include "Belief.hpp"
 
 namespace pomcp
 {
+
 /**
  * struct Edge<Z>
  *
@@ -97,51 +100,59 @@ struct ActionData
 };
 
 /**
- * class Node<S,Z>
+ * class Node<S,Z,B>
  *
  * A structure representing the nodes of the search Tree
  *
  * S is the type for states
  * Z is the type for observations
+ * B is the type for the belief (inherit from pomcp::Belief<S>)
+ *   tip: Try pomcp::VectorBelief<S> if you have a continous state space (default)
+ *        Try pomcp::MultisetBelief<S> if you have a discrete state space 
+ *        Compare (profile) different implementations
  *
  * Note: the next structs and operators should be defined:
- * 	   std::hash<S>
+ * 	   std::hash<S> (if you use a belief based on hash function)
  * 	   std::hash<Z>
- *	   bool S::operator ==(const S& other) const
+ *	   bool S::operator ==(const S& other) const (if you use a belief based on hash function)
  *	   bool Z::operator ==(const Z& other) const
  *
  * @author Ignacio Perez
  */
-template <typename S, typename Z>
+template <typename S, typename Z, typename B>
 struct Node 
 {
 	Node() : counter(0) {}
 	virtual ~Node() {}
 	unsigned counter;
-	utils::Multiset<S> particles;
+	B belief;
 	std::vector<ActionData> actionData;	
 	std::unordered_map<Edge<Z>,Node*,EdgeHasher<Z> > childs;
 };
 
 /**
- * class PomcpPlanner<S,Z,A>
+ * class PomcpPlanner<S,Z,A,B>
  *
  * Implementation of the POMCP algorithm
  *
  * S is the type for states
  * Z is the type for observations
  * A is the type for actions
+ * B is the type for the belief (inherit from pomcp::Belief<S>)
+ *   tip: Try pomcp::VectorBelief<S> if you have a continous state space (default)
+ *        Try pomcp::MultisetBelief<S> if you have a discrete state space 
+ *        Compare (profile) different implementations
  *
  * Note: the next structs and operators should be defined:
- * 	   std::hash<S>
+ * 	   std::hash<S> (if you use a belief based on hash function)
  * 	   std::hash<Z>
- *	   bool S::operator ==(const S& other) const
+ *	   bool S::operator ==(const S& other) const (if you use a belief based on hash function)
  *	   bool Z::operator ==(const Z& other) const
  *
  * @author Ignacio Perez
  */
 
-template <typename S, typename Z, typename A>
+template <typename S, typename Z, typename A, typename B=VectorBelief<S>>
 class PomcpPlanner 
 {
 public:
@@ -178,29 +189,33 @@ public:
      	 * Reset the planner to the initial belief
 	 */
 	virtual void reset();
+	
 	/**
-     	 * Get the size (number of nodes) of the tree
-	 * @return the size of the tree
-     	 */
-	virtual std::size_t size() const {return size_;}
-	/**
-	 * Get the current belief as a multiset of particles
+	 * Get the current belief 
 	 * @return the current belief
 	 */
-	const utils::Multiset<S>& getCurrentBelief() const {return root->particles;}
+	virtual const B& getCurrentBelief() const {return root->belief;}
 
+	/**
+	 * Compute the current size (number of nodes) and tree depth
+	 */
+	virtual void computeInfo(unsigned& size, unsigned& depth) const
+	{
+		size=0;
+		depth = computeInfo(root,size);
+	}
 
-	virtual unsigned getDepth() const {return getDepth(root);}
+	
 
 private:
 	void search();
-	double simulate(const S& state, Node<S,Z>* node, double depth);
+	double simulate(const S& state, Node<S,Z,B>* node, double depth);
 	double rollout(const S& state, double depth);
 	unsigned getRolloutAction(const S& state);	
-	Node<S,Z>* getNode(Node<S,Z>* parent, unsigned actionIndex, const Z& observation);
-	void eraseTree(Node<S,Z>* node);
-	void getRootParticles();
-	unsigned getDepth(Node<S,Z>* node) const;
+	Node<S,Z,B>* getNode(Node<S,Z,B>* parent, unsigned actionIndex, const Z& observation);
+	static void eraseTree(Node<S,Z,B>* node);
+	unsigned computeInfo(Node<S,Z,B>* node, unsigned& size) const;
+	static void eraseNodeAndChilds(const Edge<Z>& doNotErasethisEdge, Node<S,Z,B>* node);
 	
 	Simulator<S,Z,A>& simulator;
 
@@ -208,60 +223,51 @@ private:
 	double threshold;
 	double explorationConstant;
 	unsigned currentAction;
-	std::size_t size_;
-	
-	Node<S,Z> *root;
-	std::vector<const S*> rootParticles;
+		
+	Node<S,Z,B> *root;
 	std::vector<unsigned> actionIndexes;
 };
 
-template <typename S, typename Z, typename A>	
+template <typename S, typename Z, typename A, typename B>	
 inline
-PomcpPlanner<S,Z,A>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double threshold, double explorationConstant)
+PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double threshold, double explorationConstant)
 : simulator(simulator),
   timeout(timeout),
   threshold(threshold),
   explorationConstant(explorationConstant),
   currentAction(simulator.getNumActions()),
-  size_(1),
-  root(new Node<S,Z>())
+  root(new Node<S,Z,B>())
 {
 	actionIndexes.resize(simulator.getNumActions());
 }
 
-template <typename S, typename Z, typename A>
+template <typename S, typename Z, typename A, typename B>
 inline
-void PomcpPlanner<S,Z,A>::reset()
+void PomcpPlanner<S,Z,A,B>::reset()
 {
 	currentAction = simulator.getNumActions();
 	simulator.cleanup();
-        rootParticles.clear();
-	eraseTree(root);
-	#ifdef _POMCP_DEBUG_
-	assert(size_==0);
-	#endif
-        size_=1;
-        root = new Node<S,Z>();
+        eraseTree(root);
+	root = new Node<S,Z,B>();
 }
 
-template <typename S, typename Z, typename A>
+template <typename S, typename Z, typename A, typename B>
 inline
-Node<S,Z>* PomcpPlanner<S,Z,A>::getNode(Node<S,Z>* parent, unsigned actionIndex, const Z& observation)
+Node<S,Z,B>* PomcpPlanner<S,Z,A,B>::getNode(Node<S,Z,B>* parent, unsigned actionIndex, const Z& observation)
 {
 	Edge<Z> edge(actionIndex,observation);
 	auto it = parent->childs.find(edge);
 	if(it == parent->childs.end()) {
-		size_++;
-		Node<S,Z>* node = new Node<S,Z>();
+		Node<S,Z,B>* node = new Node<S,Z,B>();
 		parent->childs[edge] = node;
 		return node;
 	}
 	return it->second;
 }
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-unsigned PomcpPlanner<S,Z,A>::getRolloutAction(const S& state)
+unsigned PomcpPlanner<S,Z,A,B>::getRolloutAction(const S& state)
 {
 	if (simulator.allActionsAreValid(state)) {
 		return utils::RANDOM(simulator.getNumActions());
@@ -275,9 +281,9 @@ unsigned PomcpPlanner<S,Z,A>::getRolloutAction(const S& state)
 	return actionIndexes[utils::RANDOM(n)];
 }
 
-template <typename S, typename Z, typename A>
+template <typename S, typename Z, typename A, typename B>
 inline
-double PomcpPlanner<S,Z,A>::rollout(const S& state, double depth)
+double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth)
 {
 	if (depth < threshold) {
 		return 0;
@@ -292,9 +298,9 @@ double PomcpPlanner<S,Z,A>::rollout(const S& state, double depth)
 	return reward; 
 }
 
-template <typename S, typename Z, typename A>
+template <typename S, typename Z, typename A, typename B>
 inline
-double PomcpPlanner<S,Z,A>::simulate(const S& state, Node<S,Z>* node, double depth)
+double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double depth)
 {
 	if (depth < threshold) {
 		return 0;
@@ -336,8 +342,8 @@ double PomcpPlanner<S,Z,A>::simulate(const S& state, Node<S,Z>* node, double dep
 	bool stop  = simulator.simulate(state, actionIndex, nextState, observation, reward);
 	
 	if (!stop) {
-		Node<S,Z>* nextNode = getNode(node,actionIndex,observation);
-		nextNode->particles.add(nextState);
+		Node<S,Z,B>* nextNode = getNode(node,actionIndex,observation);
+		nextNode->belief.add(nextState);
 		reward += simulator.getDiscount() * simulate(nextState, nextNode , depth*simulator.getDiscount());
 	} 
 	node->counter++;
@@ -347,11 +353,11 @@ double PomcpPlanner<S,Z,A>::simulate(const S& state, Node<S,Z>* node, double dep
 	return reward;
 }
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-void PomcpPlanner<S,Z,A>::search()
+void PomcpPlanner<S,Z,A,B>::search()
 {
-	if (rootParticles.empty()) {
+	if (root->belief.empty()) {
 		S s0;
 		utils::Timer timer;
 		do {
@@ -360,7 +366,7 @@ void PomcpPlanner<S,Z,A>::search()
 	} else {
 		utils::Timer timer;
 		do {
-			simulate(*rootParticles[utils::RANDOM(rootParticles.size())],root,1.0);
+			simulate(root->belief.sample(),root,1.0);
 		} while (timer.elapsed()<timeout);
 	}
 	double aux=0;
@@ -380,9 +386,9 @@ void PomcpPlanner<S,Z,A>::search()
 	#endif
 }
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-unsigned PomcpPlanner<S,Z,A>::getAction()
+unsigned PomcpPlanner<S,Z,A,B>::getAction()
 {
 	if (currentAction==simulator.getNumActions()) {
 		search();
@@ -390,27 +396,28 @@ unsigned PomcpPlanner<S,Z,A>::getAction()
 	return currentAction;
 }
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-void PomcpPlanner<S,Z,A>::eraseTree(Node<S,Z>* node)
+void PomcpPlanner<S,Z,A,B>::eraseTree(Node<S,Z,B>* node)
 {
 	for (auto it = node->childs.begin(); it!=node->childs.end(); ++it) {
 		eraseTree(it->second);
 	}
-	size_--;
 	delete node;
+	
 }
 
-template<typename S,typename Z, typename A>
+template<typename S,typename Z, typename A, typename B>
 inline
-unsigned PomcpPlanner<S,Z,A>::getDepth(Node<S,Z>* node) const
+unsigned PomcpPlanner<S,Z,A,B>::computeInfo(Node<S,Z,B>* node, unsigned& size) const
 {
+	size++;
 	if (node->childs.empty()) {
 		return 0;
 	}
 	unsigned max=0;
 	for (auto it = node->childs.begin(); it!=node->childs.end(); ++it) {
-		unsigned aux = getDepth(it->second);
+		unsigned aux = computeInfo(it->second,size);
 		if (aux > max) {
 			max=aux;
 		}
@@ -420,45 +427,33 @@ unsigned PomcpPlanner<S,Z,A>::getDepth(Node<S,Z>* node) const
 }
 
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-void PomcpPlanner<S,Z,A>::getRootParticles()
+void PomcpPlanner<S,Z,A,B>::eraseNodeAndChilds(const Edge<Z>& doNotErasethisEdge, Node<S,Z,B>* node)
 {
-	rootParticles.resize(root->particles.size());
-	unsigned counter=0;
-	for (auto it = root->particles.data().begin(); it != root->particles.data().end(); ++it) {
-		for (unsigned i = 0; i< it->second; i++) {
-			rootParticles[counter++] = &(it->first);
-		}
+	for (auto it = node->childs.begin(); it!= node->childs.end(); ++it) {
+		if (!(it->first == doNotErasethisEdge)) {
+			eraseTree(it->second);
+		} 
 	}
+	delete node;
 }
 
-template<typename S, typename Z, typename A>
+template<typename S, typename Z, typename A, typename B>
 inline
-bool PomcpPlanner<S,Z,A>::moveTo(unsigned actionIndex, const Z& observation)
+bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 {
 	bool reseted;
 	Edge<Z> edge(actionIndex,observation);
 	auto it = root->childs.find(edge);
 	if (it == root->childs.end() ||
-		it->second->particles.size()==0) {
-		//for (auto it = root->childs.begin(); it!=root->childs.end(); ++it) {
-		//	std::cout<<(it->first.actionIndex)<<" ~ "<<(it->first.observation)<<"    ";
-		//}
-		//std::cout<<std::endl;
+		it->second->belief.size()==0) {
 		reset();
 		reseted=true;
 	} else {
-		Node<S,Z>* nextRoot = it->second;
-		for (auto it1 = root->childs.begin(); it1!= root->childs.end(); ++it1) {
-			if (!(it1->first == edge)) {
-				eraseTree(it1->second);
-			} 
-		}
-		size_--;
-		delete root;
+		Node<S,Z,B>* nextRoot = it->second;
+		boost::thread freeMemThread(eraseNodeAndChilds,edge,root);
 		root = nextRoot;
-		getRootParticles();
 		currentAction = simulator.getNumActions();
 		simulator.cleanup();
 		reseted=false;

@@ -39,7 +39,7 @@ bool tigerStopCondition(int s0, int a0, int z1, int s1)
 int main()
 {
 	ZmdpSimulator simulator(TIGER_FILE, tigerStopCondition);
-	PomcpPlanner<int,int,int> planner(simulator,TIGER_PLANNING_TIME,TIGER_THRESHOLD,TIGER_EXPLORATION_CTE);
+	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TIGER_PLANNING_TIME,TIGER_THRESHOLD,TIGER_EXPLORATION_CTE);
 	int s0,s1,z;
 	unsigned a;
 	double reward;
