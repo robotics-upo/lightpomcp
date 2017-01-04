@@ -366,7 +366,7 @@ void PomcpPlanner<S,Z,A,B>::search()
 	} else {
 		utils::Timer timer;
 		do {
-			simulate(root->belief.sample(),root,1.0);
+			simulate(root->belief.sample(),root,1.0); // Note: think what to do if there are few particles
 		} while (timer.elapsed()<timeout);
 	}
 	double aux=0;
