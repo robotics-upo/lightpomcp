@@ -205,7 +205,7 @@ public:
 		depth = computeInfo(root,size);
 	}
 
-	
+	virtual const Node<S,Z,B>* getRoot() const {return root;}
 
 private:
 	void search();
