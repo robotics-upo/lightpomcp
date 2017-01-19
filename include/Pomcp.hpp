@@ -302,7 +302,7 @@ template <typename S, typename Z, typename A, typename B>
 inline
 double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double depth)
 {
-	if (depth < threshold) {
+	if (depth < threshold) { //LUIS??? It should be discount^depth
 		return 0;
 	}
 	if (node->actionData.empty()) {
@@ -362,12 +362,13 @@ void PomcpPlanner<S,Z,A,B>::search()
 		utils::Timer timer;
 		do {
 			simulate(simulator.sampleInitialState(s0),root,1.0);
-		} while (timer.elapsed()<timeout);
+			root->belief.add(s0);//LUIS
+		} while (timer.elapsed()<timeout*2.0/3.0); //Use 2/3 of the planning time for actual planning, 1/3 for resampling. Include as parameter
 	} else {
 		utils::Timer timer;
 		do {
-			simulate(root->belief.sample(),root,1.0); // Note: think what to do if there are few particles
-		} while (timer.elapsed()<timeout);
+			simulate(root->belief.sample(),root,1.0);
+		} while (timer.elapsed()<timeout*2.0/3.0);
 	}
 	double aux=0;
 	for (unsigned a = 0; a<simulator.getNumActions(); a++) {
@@ -443,7 +444,7 @@ template<typename S, typename Z, typename A, typename B>
 inline
 bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 {
-	bool reseted;
+	/*bool reseted;
 	Edge<Z> edge(actionIndex,observation);
 	auto it = root->childs.find(edge);
 	if (it == root->childs.end() ||
@@ -458,7 +459,51 @@ bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 		simulator.cleanup();
 		reseted=false;
 	}
+	return reseted;*/
+
+	bool reseted;
+	Edge<Z> edge(actionIndex,observation);
+	auto it = root->childs.find(edge);
+	if (it == root->childs.end() ||
+		it->second->belief.size()==0) {
+		reset();
+		reseted=true;
+
+		if(it == root->childs.end())
+			std::cout << "No child " << std::endl;
+
+	} else {
+
+		std::cout << "POMCP. Particles root node:" << root->belief.size() << " Next node: " << it->second->belief.size() <<  std::endl;
+		
+		utils::Timer timer;
+		do {
+			
+			Z sObservation;
+			double reward;
+			S nextState;
+			
+			//stop  = simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward);
+			simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward);
+			
+
+			if (observation == sObservation) {
+				it->second->belief.add(nextState);
+			}
+
+		} while (timer.elapsed()<timeout/3.0);
+	
+		
+		Node<S,Z,B>* nextRoot = it->second;
+		boost::thread freeMemThread(eraseNodeAndChilds,edge,root);
+		root = nextRoot;
+		currentAction = simulator.getNumActions();
+		simulator.cleanup();
+		reseted=false;
+	}
 	return reseted;
+	
+
 }
 
 }
