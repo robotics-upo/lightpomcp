@@ -27,6 +27,7 @@
 #include <boost/functional/hash.hpp>
 #include <boost/thread.hpp>
 
+#define _POMCP_DEBUG_
 #ifdef _POMCP_DEBUG_
 #include <assert.h>
 #endif
@@ -159,13 +160,14 @@ public:
         /**
      	 * Create a new POMCP planner
 	 * @param Simulator<S,Z,A>& simulator: A reference to the Simulator<S,Z,A> to be used, see MonteCarlo.hpp
-	 * @param timeout: Planning time in seconds
+	 * @param plannigTimeout: Planning time in seconds
+	 * @param resamplingTimeout: Time in seconds to resampling particles and increase the beliefe size after moving in the tree
 	 * @param threshold: Discount factor threshold to be used, the algorithm does not expand the tree at a
          *                   given depth if discount_factor^depth is less than the threshold.
 	 *	             See the POMCP paper for more information
 	 * @param explorationConstant: Exploration constant, see the POMCP paper for more information.
      	 */
-	PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double threshold, double explorationConstant);
+	PomcpPlanner(Simulator<S,Z,A>& simulator, double planningTimeout, double resamplingTimeout, double threshold, double explorationConstant);
 	virtual ~PomcpPlanner()
 	{
 		simulator.cleanup();
@@ -173,11 +175,10 @@ public:
 	}
 	/**
      	 * Get the index of the best action to be executed at the current belief
-	 * Note: The planning algorithm will be called if this is the first time the method is called or 
-	 *       the current belief has been updated by moveTo(action,observation)
+	 * Note: The planning algorithm will be called if the shouldSearch argument is true
 	 * @return the index of the best action to be executed
      	 */
-	virtual unsigned getAction();
+	virtual unsigned getAction(bool shouldSearch=true);
 	/**
      	 * Update the current belief
 	 * @param actionIndex: The index of the last executed action
@@ -189,7 +190,6 @@ public:
      	 * Reset the planner to the initial belief
 	 */
 	virtual void reset();
-	
 	/**
 	 * Get the current belief 
 	 * @return the current belief
@@ -206,9 +206,10 @@ public:
 	}
 
 	virtual const Node<S,Z,B>* getRoot() const {return root;}
-
+	virtual void search();
 private:
-	void search();
+	void generateInitialBelief();	
+	
 	double simulate(const S& state, Node<S,Z,B>* node, double depth);
 	double rollout(const S& state, double depth);
 	unsigned getRolloutAction(const S& state);	
@@ -219,7 +220,8 @@ private:
 	
 	Simulator<S,Z,A>& simulator;
 
-	double timeout;
+	double planningTimeout;
+	double resamplingTimeout;
 	double threshold;
 	double explorationConstant;
 	unsigned currentAction;
@@ -230,9 +232,10 @@ private:
 
 template <typename S, typename Z, typename A, typename B>	
 inline
-PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double threshold, double explorationConstant)
+PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double resamplingTimeout, double threshold, double explorationConstant)
 : simulator(simulator),
-  timeout(timeout),
+  planningTimeout(planningTimeout),
+  resamplingTimeout(resamplingTimeout),
   threshold(threshold),
   explorationConstant(explorationConstant),
   currentAction(simulator.getNumActions()),
@@ -298,11 +301,12 @@ double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth)
 	return reward; 
 }
 
+
 template <typename S, typename Z, typename A, typename B>
 inline
 double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double depth)
 {
-	if (depth < threshold) { //LUIS??? It should be discount^depth
+	if (depth < threshold) { 
 		return 0;
 	}
 	if (node->actionData.empty()) {
@@ -353,6 +357,18 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 	return reward;
 }
 
+template <typename S, typename Z, typename A, typename B>
+inline
+void PomcpPlanner<S,Z,A,B>::generateInitialBelief()
+{
+	utils::Timer timer;
+	S s0;
+	do {
+		simulator.sampleInitialState(s0);
+		root->belief.add(s0);
+	} while(timer.elapsed() < resamplingTimeout);	
+}
+
 template<typename S, typename Z, typename A, typename B>
 inline
 void PomcpPlanner<S,Z,A,B>::search()
@@ -362,13 +378,23 @@ void PomcpPlanner<S,Z,A,B>::search()
 		utils::Timer timer;
 		do {
 			simulate(simulator.sampleInitialState(s0),root,1.0);
-			root->belief.add(s0);//LUIS
-		} while (timer.elapsed()<timeout*2.0/3.0); //Use 2/3 of the planning time for actual planning, 1/3 for resampling. Include as parameter
+			root->belief.add(s0);
+		} while (timer.elapsed()< (planningTimeout + resamplingTimeout)); 
 	} else {
 		utils::Timer timer;
 		do {
 			simulate(root->belief.sample(),root,1.0);
-		} while (timer.elapsed()<timeout*2.0/3.0);
+		} while (timer.elapsed()<planningTimeout);
+	}
+	
+}
+
+template<typename S, typename Z, typename A, typename B>
+inline
+unsigned PomcpPlanner<S,Z,A,B>::getAction(bool shouldSearch)
+{
+	if (shouldSearch && (currentAction == simulator.getNumActions())) {
+		search();
 	}
 	double aux=0;
 	for (unsigned a = 0; a<simulator.getNumActions(); a++) {
@@ -380,20 +406,11 @@ void PomcpPlanner<S,Z,A,B>::search()
 			aux = root->actionData[a].value;
 
 		}
-
 	}
 	#ifdef _POMCP_DEBUG_
 	assert(currentAction != simulator.getNumActions());
 	#endif
-}
 
-template<typename S, typename Z, typename A, typename B>
-inline
-unsigned PomcpPlanner<S,Z,A,B>::getAction()
-{
-	if (currentAction==simulator.getNumActions()) {
-		search();
-	}
 	return currentAction;
 }
 
@@ -468,32 +485,27 @@ bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 		it->second->belief.size()==0) {
 		reset();
 		reseted=true;
-
-		if(it == root->childs.end())
+		generateInitialBelief();
+		#ifdef _POMCP_DEBUG_
+		if(it == root->childs.end()) {
 			std::cout << "No child " << std::endl;
-
+		}
+		#endif
 	} else {
-
+		#ifdef _POMCP_DEBUG_
 		std::cout << "POMCP. Particles root node:" << root->belief.size() << " Next node: " << it->second->belief.size() <<  std::endl;
-		
+		#endif		
 		utils::Timer timer;
 		do {
-			
 			Z sObservation;
 			double reward;
 			S nextState;
-			
-			//stop  = simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward);
 			simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward);
-			
-
 			if (observation == sObservation) {
 				it->second->belief.add(nextState);
 			}
 
-		} while (timer.elapsed()<timeout/3.0);
-	
-		
+		} while (timer.elapsed()<resamplingTimeout);
 		Node<S,Z,B>* nextRoot = it->second;
 		boost::thread freeMemThread(eraseNodeAndChilds,edge,root);
 		root = nextRoot;
@@ -502,8 +514,6 @@ bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 		reseted=false;
 	}
 	return reseted;
-	
-
 }
 
 }
