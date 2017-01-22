@@ -166,8 +166,10 @@ public:
          *                   given depth if discount_factor^depth is less than the threshold.
 	 *	             See the POMCP paper for more information
 	 * @param explorationConstant: Exploration constant, see the POMCP paper for more information.
+	 * @param particlesInitialBelief: number of particles for the initial belief in the tree. The planner will sample until this
+	 *			number is reached, or resamplingTimeout.
      	 */
-	PomcpPlanner(Simulator<S,Z,A>& simulator, double planningTimeout, double resamplingTimeout, double threshold, double explorationConstant);
+	PomcpPlanner(Simulator<S,Z,A>& simulator, double planningTimeout, double resamplingTimeout, double threshold, double explorationConstant, unsigned particlesInitialBelief);
 	virtual ~PomcpPlanner()
 	{
 		simulator.cleanup();
@@ -225,6 +227,7 @@ private:
 	double threshold;
 	double explorationConstant;
 	unsigned currentAction;
+	unsigned numParticlesInitialBelief;
 		
 	Node<S,Z,B> *root;
 	std::vector<unsigned> actionIndexes;
@@ -232,12 +235,13 @@ private:
 
 template <typename S, typename Z, typename A, typename B>	
 inline
-PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double resamplingTimeout, double threshold, double explorationConstant)
+PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout, double resamplingTimeout, double threshold, double explorationConstant, unsigned particlesInitialBelief)
 : simulator(simulator),
-  planningTimeout(planningTimeout),
+  planningTimeout(timeout),
   resamplingTimeout(resamplingTimeout),
   threshold(threshold),
   explorationConstant(explorationConstant),
+  numParticlesInitialBelief(particlesInitialBelief),
   currentAction(simulator.getNumActions()),
   root(new Node<S,Z,B>())
 {
@@ -366,7 +370,7 @@ void PomcpPlanner<S,Z,A,B>::generateInitialBelief()
 	do {
 		simulator.sampleInitialState(s0);
 		root->belief.add(s0);
-	} while(timer.elapsed() < resamplingTimeout);	
+	} while(timer.elapsed() < resamplingTimeout && root->belief.size()<numParticlesInitialBelief);	
 }
 
 template<typename S, typename Z, typename A, typename B>
@@ -379,7 +383,7 @@ void PomcpPlanner<S,Z,A,B>::search()
 		do {
 			simulate(simulator.sampleInitialState(s0),root,1.0);
 			root->belief.add(s0);
-		} while (timer.elapsed()< (planningTimeout + resamplingTimeout)); 
+		} while (timer.elapsed()< (planningTimeout)); 
 	} else {
 		utils::Timer timer;
 		do {
@@ -408,7 +412,9 @@ unsigned PomcpPlanner<S,Z,A,B>::getAction(bool shouldSearch)
 		}
 	}
 	#ifdef _POMCP_DEBUG_
-	assert(currentAction != simulator.getNumActions());
+	//assert(currentAction != simulator.getNumActions());
+	if(currentAction == simulator.getNumActions())
+		std::cout << "POMCP: getAction() gives no action" << std::endl;
 	#endif
 
 	return currentAction;
