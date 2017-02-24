@@ -1,5 +1,6 @@
+ZMDPLIBLDIR = zmdp/lib/linux4/
 CFlags=-c -Wall -O3  -std=gnu++11 -Iinclude -Izmdp/include
-LDFlags= -Lzmdp/lib/linux3 -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon -lboost_thread -lboost_system
+LDFlags= -Lzmdp/lib/linux3 -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon -lboost_thread -lboost_system -L$(ZMDPLIBLDIR)
 CC=g++
 RM=rm
 
