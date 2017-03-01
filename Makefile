@@ -1,5 +1,8 @@
+OS_SYSNAME := $(shell uname -s | perl -ple 'tr/A-Z/a-z/;')
+OS_RELEASE := $(shell uname -r | perl -ple 's/\..*$$//;')
+OS := $(OS_SYSNAME)$(OS_RELEASE)
 CFlags=-c -Wall -O3  -std=gnu++11 -Iinclude -Izmdp/include
-LDFlags= -Lzmdp/lib/linux3 -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon -lboost_thread -lboost_system
+LDFlags= -Lzmdp/lib/$(OS) -lzmdpPomdpCore -lzmdpPomdpParser -lzmdpPomdpBounds -lzmdpCommon -lboost_thread -lboost_system 
 CC=g++
 RM=rm
 
