@@ -30,9 +30,11 @@
 #define TAG_ACTION_CATCH 4
 
 #define TAG_FILE "../models/tag.pomdp"
-#define TAG_PLANNING_TIME 1.0
+#define TAG_PLANNING_TIME 0.9
+#define TAG_RESAMPLING_TIME 0.1
 #define TAG_THRESHOLD 0.01
 #define TAG_EXPLORATION_CTE 100
+#define TAG_PARTICLES 1000
 
 using namespace pomcp;
 
@@ -148,7 +150,7 @@ void printTag(int s0,int a0, int z1, double reward)
 int main()
 {
 	ZmdpSimulator simulator(TAG_FILE, tagStopCondition);
-	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TAG_PLANNING_TIME,TAG_THRESHOLD,TAG_EXPLORATION_CTE);
+	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TAG_PLANNING_TIME,TAG_RESAMPLING_TIME,TAG_THRESHOLD,TAG_EXPLORATION_CTE,TAG_PARTICLES);
 
 	int s0,a0,s1,z1;
 	double r,reward,discount;

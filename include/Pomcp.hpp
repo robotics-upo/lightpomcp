@@ -27,7 +27,7 @@
 #include <boost/functional/hash.hpp>
 #include <boost/thread.hpp>
 
-#define _POMCP_DEBUG_
+//#define _POMCP_DEBUG_
 #ifdef _POMCP_DEBUG_
 #include <assert.h>
 #endif
@@ -161,7 +161,7 @@ public:
      	 * Create a new POMCP planner
 	 * @param Simulator<S,Z,A>& simulator: A reference to the Simulator<S,Z,A> to be used, see MonteCarlo.hpp
 	 * @param plannigTimeout: Planning time in seconds
-	 * @param resamplingTimeout: Time in seconds to resampling particles and increase the beliefe size after moving in the tree
+	 * @param resamplingTimeout: Time in seconds for resampling particles and increase the beliefe size after moving in the tree
 	 * @param threshold: Discount factor threshold to be used, the algorithm does not expand the tree at a
          *                   given depth if discount_factor^depth is less than the threshold.
 	 *	             See the POMCP paper for more information
@@ -241,8 +241,8 @@ PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout,
   resamplingTimeout(resamplingTimeout),
   threshold(threshold),
   explorationConstant(explorationConstant),
-  numParticlesInitialBelief(particlesInitialBelief),
   currentAction(simulator.getNumActions()),
+  numParticlesInitialBelief(particlesInitialBelief),
   root(new Node<S,Z,B>())
 {
 	actionIndexes.resize(simulator.getNumActions());

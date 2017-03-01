@@ -24,9 +24,11 @@
 #include "Pomcp.hpp"
 
 #define TIGER_FILE "../models/tiger.pomdp"
-#define TIGER_PLANNING_TIME 1.0
+#define TIGER_PLANNING_TIME 0.9
+#define TIGER_RESAMPLING_TIME 0.1
 #define TIGER_THRESHOLD 0.01
 #define TIGER_EXPLORATION_CTE 100
+#define TIGER_PARTICLES 1000
 
 
 using namespace pomcp;
@@ -39,7 +41,7 @@ bool tigerStopCondition(int s0, int a0, int z1, int s1)
 int main()
 {
 	ZmdpSimulator simulator(TIGER_FILE, tigerStopCondition);
-	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TIGER_PLANNING_TIME,TIGER_THRESHOLD,TIGER_EXPLORATION_CTE);
+	PomcpPlanner<int,int,int,pomcp::MultisetBelief<int>> planner(simulator,TIGER_PLANNING_TIME,TIGER_RESAMPLING_TIME,TIGER_THRESHOLD,TIGER_EXPLORATION_CTE,TIGER_PARTICLES);
 	int s0,s1,z;
 	unsigned a;
 	double reward;
