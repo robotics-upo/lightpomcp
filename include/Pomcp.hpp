@@ -127,6 +127,7 @@ struct Node
 	virtual ~Node() {}
 	unsigned counter;
 	B belief;
+	std::vector<unsigned> validActions;
 	std::vector<ActionData> actionData;	
 	std::unordered_map<Edge<Z>,Node*,EdgeHasher<Z> > childs;
 };
@@ -245,7 +246,7 @@ PomcpPlanner<S,Z,A,B>::PomcpPlanner(Simulator<S,Z,A>& simulator, double timeout,
   numParticlesInitialBelief(particlesInitialBelief),
   root(new Node<S,Z,B>())
 {
-	actionIndexes.resize(simulator.getNumActions());
+	
 }
 
 template <typename S, typename Z, typename A, typename B>
@@ -279,13 +280,8 @@ unsigned PomcpPlanner<S,Z,A,B>::getRolloutAction(const S& state)
 	if (simulator.allActionsAreValid(state)) {
 		return utils::RANDOM(simulator.getNumActions());
 	}
-	unsigned n=0;
-	for (unsigned a=0;a<simulator.getNumActions();a++) {
-		if (simulator.isValidAction(state,a)) {
-			actionIndexes[n++]=a;
-		}
-	}
-	return actionIndexes[utils::RANDOM(n)];
+	simulator.getValidActions(state,actionIndexes);
+	return actionIndexes[utils::RANDOM(actionIndexes.size())];
 }
 
 template <typename S, typename Z, typename A, typename B>
@@ -314,20 +310,29 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 		return 0;
 	}
 	if (node->actionData.empty()) {
-		node->actionData.resize(simulator.getNumActions());
+		if (simulator.allActionsAreValid(state)) {
+			node->actionData.resize(simulator.getNumActions());
+			node->validActions.resize(simulator.getNumActions());
+			for (unsigned i=0; i< simulator.getNumActions(); i++) {
+				node->validActions[i]=i;
+			}
+		} else {
+			simulator.getValidActions(state,node->validActions);
+			node->actionData.resize(node->validActions.size());
+		}
 		return rollout(state, depth);
 	}
-	unsigned actionIndex = simulator.getNumActions();
+	
+	unsigned validActionIndex  = simulator.getNumActions() ,actionIndex = simulator.getNumActions();
 	if (node->counter == 0) {
-		actionIndex = getRolloutAction(state);
+		validActionIndex = utils::RANDOM(node->validActions.size());
+		actionIndex = node->validActions[validActionIndex];
 	} else {
 		double aux, max = 0;
-		for (unsigned a = 0; a<simulator.getNumActions(); a++) {
-			if (!simulator.isValidAction(state,a)) {
-				continue;			
-			}
+		for (unsigned a = 0; a<node->validActions.size(); a++) {
 			if (node->actionData[a].counter == 0 && explorationConstant > 0.0) {
-				actionIndex = a;
+				actionIndex = node->validActions[a];
+				validActionIndex = a;
 				break;
 			}
 			aux = node->actionData[a].value;
@@ -336,7 +341,8 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 					std::sqrt(std::log((double)(node->counter))/(double)(node->actionData[a].counter));
 			}
 			if (actionIndex == simulator.getNumActions() || aux > max) {
-				actionIndex = a;
+				actionIndex = node->validActions[a];
+				validActionIndex = a;
 				max = aux;
 			}		
 		}
@@ -355,9 +361,9 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 		reward += simulator.getDiscount() * simulate(nextState, nextNode , depth*simulator.getDiscount());
 	} 
 	node->counter++;
-	node->actionData[actionIndex].counter++;
-	node->actionData[actionIndex].value += 
-			(reward - node->actionData[actionIndex].value)/(double)(node->actionData[actionIndex].counter);	
+	node->actionData[validActionIndex].counter++;
+	node->actionData[validActionIndex].value += 
+			(reward - node->actionData[validActionIndex].value)/(double)(node->actionData[validActionIndex].counter);	
 	return reward;
 }
 
@@ -401,12 +407,12 @@ unsigned PomcpPlanner<S,Z,A,B>::getAction(bool shouldSearch)
 		search();
 	}
 	double aux=0;
-	for (unsigned a = 0; a<simulator.getNumActions(); a++) {
+	for (unsigned a = 0; a<root->validActions.size(); a++) {
 		if (root->actionData[a].counter==0) {
 			continue;
 		}
 		if (currentAction == simulator.getNumActions() || root->actionData[a].value > aux) {
-			currentAction = a;
+			currentAction = root->validActions[a];
 			aux = root->actionData[a].value;
 
 		}

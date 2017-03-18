@@ -93,7 +93,7 @@ public:
 	virtual const A& getAction(unsigned actionIndex) const = 0;
 	/**
    	 * Check if all actions are valid for a given state
-	 * Note: Implement this method only if you can provide an efficiency better than O(n) over the size of actions
+	 * Note: Override this method only if you can provide an efficiency better than O(n) over the size of actions
 	 * @param state: [IN] one state
 	 * @return true if all actions are valid for the given state, false otherwise
 	 */
@@ -114,6 +114,23 @@ public:
 	 * Implement only if needed
 	 */
 	virtual void cleanup() {}
+	/**
+	 * Get all valid actions for a given state
+	 * Note: Override this method only if you can provide an efficiency better than O(n) over the size of actions
+	 * @param state: [IN] one state
+	 * @param validActions: [IN/OUT] array to store the indexes of the valid actions
+	 * @return validActions
+	 */
+	virtual std::vector<unsigned>& getValidActions(const S& state, std::vector<unsigned>& validActions) const
+	{
+		validActions.clear();
+		for (unsigned a=0;a<getNumActions();a++) {
+			if (isValidAction(state,a)) {
+				validActions.push_back(a);
+			}
+		}
+		return validActions;
+	}
 };
 
 }
