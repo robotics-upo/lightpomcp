@@ -213,8 +213,8 @@ public:
 private:
 	void generateInitialBelief();	
 	
-	double simulate(const S& state, Node<S,Z,B>* node, double depth);
-	double rollout(const S& state, double depth);
+	double simulate(const S& state, Node<S,Z,B>* node, double depth,unsigned depthLevel);
+	double rollout(const S& state, double depth,unsigned depthLevel);
 	unsigned getRolloutAction(const S& state);	
 	Node<S,Z,B>* getNode(Node<S,Z,B>* parent, unsigned actionIndex, const Z& observation);
 	static void eraseTree(Node<S,Z,B>* node);
@@ -286,7 +286,7 @@ unsigned PomcpPlanner<S,Z,A,B>::getRolloutAction(const S& state)
 
 template <typename S, typename Z, typename A, typename B>
 inline
-double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth)
+double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth, unsigned depthLevel)
 {
 	if (depth < threshold) {
 		return 0;
@@ -294,9 +294,9 @@ double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth)
 	unsigned action = getRolloutAction(state);
 	double reward;
 	S nextState;
-	bool stop = simulator.simulate(state, action, nextState, reward);
+	bool stop = simulator.simulate(state, action, nextState, reward, depthLevel);
 	if (!stop) {
-		reward += simulator.getDiscount() * rollout(nextState, depth*simulator.getDiscount()); 
+		reward += simulator.getDiscount() * rollout(nextState, depth*simulator.getDiscount(),depthLevel+1); 
 	}
 	return reward; 
 }
@@ -304,7 +304,7 @@ double PomcpPlanner<S,Z,A,B>::rollout(const S& state, double depth)
 
 template <typename S, typename Z, typename A, typename B>
 inline
-double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double depth)
+double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double depth,unsigned depthLevel)
 {
 	if (depth < threshold) { 
 		return 0;
@@ -320,7 +320,7 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 			simulator.getValidActions(state,node->validActions);
 			node->actionData.resize(node->validActions.size());
 		}
-		return rollout(state, depth);
+		return rollout(state, depth,depthLevel);
 	}
 	
 	unsigned validActionIndex  = simulator.getNumActions() ,actionIndex = simulator.getNumActions();
@@ -353,12 +353,12 @@ double PomcpPlanner<S,Z,A,B>::simulate(const S& state, Node<S,Z,B>* node, double
 	Z observation;
 	double reward;
 	S nextState;
-	bool stop  = simulator.simulate(state, actionIndex, nextState, observation, reward);
+	bool stop  = simulator.simulate(state, actionIndex, nextState, observation, reward, depthLevel);
 	
 	if (!stop) {
 		Node<S,Z,B>* nextNode = getNode(node,actionIndex,observation);
 		nextNode->belief.add(nextState);
-		reward += simulator.getDiscount() * simulate(nextState, nextNode , depth*simulator.getDiscount());
+		reward += simulator.getDiscount() * simulate(nextState, nextNode , depth*simulator.getDiscount(),depthLevel+1);
 	} 
 	node->counter++;
 	node->actionData[validActionIndex].counter++;
@@ -387,13 +387,13 @@ void PomcpPlanner<S,Z,A,B>::search()
 		S s0;
 		utils::Timer timer;
 		do {
-			simulate(simulator.sampleInitialState(s0),root,1.0);
+			simulate(simulator.sampleInitialState(s0),root,1.0,0);
 			root->belief.add(s0);
 		} while (timer.elapsed()< (planningTimeout)); 
 	} else {
 		utils::Timer timer;
 		do {
-			simulate(root->belief.sample(),root,1.0);
+			simulate(root->belief.sample(),root,1.0,0);
 		} while (timer.elapsed()<planningTimeout);
 	}
 	
@@ -512,7 +512,7 @@ bool PomcpPlanner<S,Z,A,B>::moveTo(unsigned actionIndex, const Z& observation)
 			Z sObservation;
 			double reward;
 			S nextState;
-			simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward);
+			simulator.simulate(root->belief.sample(), actionIndex, nextState, sObservation, reward,0);
 			if (observation == sObservation) {
 				it->second->belief.add(nextState);
 			}

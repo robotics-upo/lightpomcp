@@ -50,7 +50,7 @@ int main()
 	while (counter<100) {
 		a = planner.getAction();
 		
-		simulator.simulate(s0,a,s1,z,reward);
+		simulator.simulate(s0,a,s1,z,reward,0);
 		if (a==0) {
 			std::cout<<"I'm going to hear..."<<std::endl;
 			if (z==0) {

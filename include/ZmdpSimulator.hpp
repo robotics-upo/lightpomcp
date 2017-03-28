@@ -78,8 +78,8 @@ public:
 	virtual ~ZmdpSimulator();
 	virtual double getDiscount() const {return model->discount;}
 	virtual int& sampleInitialState(int& state) const;
-	virtual bool simulate(const int& state, unsigned actionIndex, int& nextState, int& observation, double& reward) const;
-	virtual bool simulate(const int& state, unsigned actionIndex, int& nextState, double& reward) const;
+	virtual bool simulate(const int& state, unsigned actionIndex, int& nextState, int& observation, double& reward,unsigned depth) const;
+	virtual bool simulate(const int& state, unsigned actionIndex, int& nextState, double& reward,unsigned depth) const;
 	virtual unsigned getNumActions() const {return actions.size();}
 	virtual const int& getAction(unsigned actionIndex) const {return actions[actionIndex];}
 	virtual bool allActionsAreValid(const int& state) const {return true;}
@@ -191,7 +191,7 @@ int& ZmdpSimulator::sampleInitialState(int& state) const
 }
 
 inline
-bool ZmdpSimulator::simulate(const int& state, unsigned actionIndex, int& nextState, int& observation, double& reward) const
+bool ZmdpSimulator::simulate(const int& state, unsigned actionIndex, int& nextState, int& observation, double& reward,unsigned depth) const
 {
 	const int& a = getAction(actionIndex);
 	reward = model->R(state,a);
@@ -201,10 +201,10 @@ bool ZmdpSimulator::simulate(const int& state, unsigned actionIndex, int& nextSt
 }
 
 inline
-bool ZmdpSimulator::simulate(const int& state, unsigned actionIndex, int& nextState, double& reward) const
+bool ZmdpSimulator::simulate(const int& state, unsigned actionIndex, int& nextState, double& reward,unsigned depth) const
 {
 	int observation;
-	bool stop = simulate(state,actionIndex,nextState,observation,reward);
+	bool stop = simulate(state,actionIndex,nextState,observation,reward,depth);
 	return stop;
 }
 

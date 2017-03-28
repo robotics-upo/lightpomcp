@@ -65,10 +65,11 @@ public:
 	 * @param actionIndex: [IN] index of the action to be executed over the current state
 	 * @param nextState: [IN/OUT] variable of type S to be filled with the next state
 	 * @param observation: [IN/OUT] variable of type Z to be filled with the obtained observation
-	 * @param reward: [IN/OUT] variable of type double to be filled with the inmediate reward R(state,action)  
+	 * @param reward: [IN/OUT] variable of type double to be filled with the inmediate reward R(state,action)
+         * @param depth: [IN] tree depth
 	 * @return true if the next state is a terminal state, false otherwise
 	 */
-        virtual bool simulate(const S& state, unsigned actionIndex, S& nextState, Z& observation, double& reward) const = 0;
+        virtual bool simulate(const S& state, unsigned actionIndex, S& nextState, Z& observation, double& reward, unsigned depth) const = 0;
 	/**
 	 * Simulate one transition (State,Action) -> (NextState,Observation,Reward) 
 	 * following the rules of the model
@@ -76,9 +77,10 @@ public:
 	 * @param actionIndex: [IN] index of the action to be executed over the current state
 	 * @param nextState: [IN/OUT] variable of type S to be filled with the next state
 	 * @param reward: [IN/OUT] variable of type double to be filled with the inmediate reward R(state,action)  
+	 * @param depth: [IN] tree depth
 	 * @return true if the next state is a terminal state, false otherwise
 	 */
-        virtual bool simulate(const S& state, unsigned actionIndex, S& nextState, double& reward) const = 0;
+        virtual bool simulate(const S& state, unsigned actionIndex, S& nextState, double& reward, unsigned depth) const = 0;
        	/**
    	 * Get the number of actions
        	 * @return the number of actions

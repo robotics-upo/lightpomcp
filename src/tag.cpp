@@ -160,7 +160,7 @@ int main()
 		std::cout<<"Simulation "<<i<<std::endl;
 		simulator.sampleInitialState(s0);
 		a0 = planner.getAction();
-		simulator.simulate(s0,a0,s1,z1,r);
+		simulator.simulate(s0,a0,s1,z1,r,0);
 		discount = 1.0;
 		reward = r;
 		while(!tagStopCondition(s0,a0,z1,s1)) {
@@ -171,7 +171,7 @@ int main()
 			planner.moveTo(a0,z1);
 			s0 = s1;
 			a0 = planner.getAction();
-			simulator.simulate(s0,a0,s1,z1,r);
+			simulator.simulate(s0,a0,s1,z1,r,0);
 			discount *= simulator.getDiscount();
 			reward += discount*r;
 		}
