@@ -1,3 +1,4 @@
 # LightPOMCP
-A generic lightweight implementation of the POMCP algorithm described in http://www0.cs.ucl.ac.uk/staff/d.silver/web/Publications_files/pomcp.pdf
+A generic lightweight implementation of the POMCP algorithm described in 
+https://papers.nips.cc/paper/4031-monte-carlo-planning-in-large-pomdps
 
